@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background-color: #0A0A0A;
+    color: #ffffff;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-soil-800 border border-white/5 rounded-2xl backdrop-blur-sm;
+    background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .glass-card:hover {
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08);
+    border-color: rgba(0,255,127,0.15);
+  }
+
+  .khet-button {
+    @apply bg-khet-500 text-soil-950 font-semibold rounded-xl px-6 py-3 transition-all duration-200;
+    font-family: 'Syne', sans-serif;
+    box-shadow: 0 0 20px rgba(0,255,127,0.3);
+  }
+
+  .khet-button:hover {
+    @apply bg-khet-400;
+    box-shadow: 0 0 30px rgba(0,255,127,0.5);
+    transform: translateY(-1px);
+  }
+
+  .khet-button:active {
+    transform: translateY(0px);
+  }
+
+  .stat-card {
+    @apply glass-card p-5 transition-all duration-300 cursor-default;
+  }
+
+  .nav-link {
+    @apply flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-200 text-white/50;
+  }
+
+  .nav-link.active {
+    @apply text-khet-500;
+    background: rgba(0,255,127,0.08);
+  }
+
+  .nav-link:hover:not(.active) {
+    @apply text-white/80;
+    background: rgba(255,255,255,0.04);
+  }
+
+  .severity-badge {
+    @apply text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider;
+  }
+
+  .severity-mild { @apply bg-blue-500/20 text-blue-400; }
+  .severity-moderate { @apply bg-yellow-500/20 text-yellow-400; }
+  .severity-severe { @apply bg-orange-500/20 text-orange-400; }
+  .severity-critical { @apply bg-red-500/20 text-red-400; }
+
+  .chat-bubble-agent {
+    @apply glass-card p-3 max-w-xs text-sm text-white/90 rounded-2xl rounded-bl-sm;
+  }
+
+  .chat-bubble-vendor {
+    @apply p-3 max-w-xs text-sm rounded-2xl rounded-br-sm ml-auto;
+    background: rgba(0,255,127,0.1);
+    border: 1px solid rgba(0,255,127,0.2);
+    color: #ccffe8;
+  }
+
+  .urdu-text {
+    font-family: 'Noto Nastaliq Urdu', serif;
+    direction: rtl;
+    text-align: right;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    @apply font-bold text-white;
+  }
+
+  .data-label {
+    @apply text-xs text-white/40 uppercase tracking-widest;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .animate-in {
+    animation: fadeSlideIn 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .glow-dot {
+    @apply w-2 h-2 rounded-full bg-khet-500;
+    box-shadow: 0 0 6px #00FF7F, 0 0 12px #00FF7F44;
+  }
+}

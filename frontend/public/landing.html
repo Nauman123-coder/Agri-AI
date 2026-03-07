@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KhetAI — Farm-to-Fork Autonomous Negotiator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Lato:wght@300;400;700&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --green-deep:    #0a3d1f;
+      --green-mid:     #1a6b3a;
+      --green-bright:  #22a552;
+      --green-light:   #4cd680;
+      --green-pale:    #d4f5e2;
+      --green-mist:    #eef9f3;
+      --white:         #ffffff;
+      --off-white:     #f8fdf9;
+      --gold:          #c8a84b;
+      --text-dark:     #0d2b18;
+      --text-mid:      #2d6045;
+      --text-muted:    #6b9e80;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Lato', sans-serif;
+      background: var(--white);
+      color: var(--text-dark);
+      overflow-x: hidden;
+    }
+
+    /* ── SCROLLBAR ──────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--green-mist); }
+    ::-webkit-scrollbar-thumb { background: var(--green-bright); border-radius: 3px; }
+
+    /* ── NOISE TEXTURE OVERLAY ──────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    /* ── NAV ────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 5%;
+      height: 72px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(34,165,82,0.12);
+      box-shadow: 0 2px 24px rgba(10,61,31,0.06);
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .nav-logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--green-mid), var(--green-bright));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 4px 12px rgba(34,165,82,0.3);
+    }
+
+    .nav-logo-text {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      line-height: 1;
+    }
+
+    .nav-logo-urdu {
+      font-family: 'Noto Nastaliq Urdu', serif;
+      font-size: 0.7rem;
+      color: var(--green-bright);
+      direction: rtl;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--green-bright); }
+
+    .nav-cta {
+      background: linear-gradient(135deg, var(--green-mid), var(--green-bright));
+      color: white !important;
+      padding: 10px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(34,165,82,0.35);
+      transition: transform 0.2s, box-shadow 0.2s !important;
+    }
+
+    .nav-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(34,165,82,0.45) !important;
+      color: white !important;
+    }
+
+    /* ── HERO ────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      padding: 120px 5% 80px;
+      background: 
+        radial-gradient(ellipse at 20% 50%, rgba(34,165,82,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(10,61,31,0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 80%, rgba(76,214,128,0.05) 0%, transparent 50%),
+        var(--white);
+    }
+
+    /* Floating orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      animation: float-orb 8s ease-in-out infinite;
+    }
+
+    .orb-1 {
+      width: 500px; height: 500px;
+      top: -150px; right: -100px;
+      background: radial-gradient(circle, rgba(34,165,82,0.10) 0%, transparent 70%);
+      animation-delay: 0s;
+    }
+
+    .orb-2 {
+      width: 350px; height: 350px;
+      bottom: 50px; left: -80px;
+      background: radial-gradient(circle, rgba(76,214,128,0.08) 0%, transparent 70%);
+      animation-delay: -3s;
+    }
+
+    .orb-3 {
+      width: 200px; height: 200px;
+      top: 40%; left: 15%;
+      background: radial-gradient(circle, rgba(200,168,75,0.07) 0%, transparent 70%);
+      animation-delay: -5s;
+    }
+
+    @keyframes float-orb {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-30px) scale(1.05); }
+    }
+
+    /* Leaf pattern */
+    .hero-leaves {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .leaf {
+      position: absolute;
+      opacity: 0.06;
+      animation: drift 15s linear infinite;
+    }
+
+    @keyframes drift {
+      0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+      10% { opacity: 0.06; }
+      90% { opacity: 0.06; }
+      100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(34,165,82,0.12), rgba(76,214,128,0.08));
+      border: 1px solid rgba(34,165,82,0.25);
+      border-radius: 100px;
+      padding: 8px 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--green-mid);
+      margin-bottom: 2rem;
+      animation: fade-up 0.8s ease-out forwards;
+      opacity: 0;
+    }
+
+    .hero-badge-dot {
+      width: 7px; height: 7px;
+      background: var(--green-bright);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--green-bright);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { box-shadow: 0 0 6px var(--green-bright); }
+      50% { box-shadow: 0 0 14px var(--green-bright), 0 0 24px rgba(34,165,82,0.4); }
+    }
+
+    .hero-headline {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.8rem, 6vw, 5.5rem);
+      font-weight: 900;
+      line-height: 1.08;
+      text-align: center;
+      color: var(--green-deep);
+      max-width: 900px;
+      animation: fade-up 0.8s 0.2s ease-out forwards;
+      opacity: 0;
+    }
+
+    .hero-headline em {
+      font-style: italic;
+      color: var(--green-bright);
+      position: relative;
+    }
+
+    .hero-headline em::after {
+      content: '';
+      position: absolute;
+      bottom: -4px; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--green-bright), var(--green-light));
+      border-radius: 2px;
+    }
+
+    .hero-urdu {
+      font-family: 'Noto Nastaliq Urdu', serif;
+      font-size: clamp(1.1rem, 2.5vw, 1.8rem);
+      color: var(--green-bright);
+      direction: rtl;
+      margin-top: 0.5rem;
+      animation: fade-up 0.8s 0.35s ease-out forwards;
+      opacity: 0;
+    }
+
+    .hero-description {
+      max-width: 680px;
+      text-align: center;
+      font-size: clamp(1rem, 1.5vw, 1.15rem);
+      font-weight: 300;
+      line-height: 1.8;
+      color: var(--text-mid);
+      margin-top: 1.8rem;
+      animation: fade-up 0.8s 0.45s ease-out forwards;
+      opacity: 0;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      animation: fade-up 0.8s 0.6s ease-out forwards;
+      opacity: 0;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--green-deep), var(--green-mid));
+      color: white;
+      padding: 16px 36px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      box-shadow: 0 8px 32px rgba(10,61,31,0.3), 0 0 0 1px rgba(34,165,82,0.2);
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--green-mid), var(--green-bright));
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+
+    .btn-primary:hover::before { opacity: 1; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(10,61,31,0.35); }
+
+    .btn-primary span { position: relative; }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--green-deep);
+      padding: 16px 36px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      border: 2px solid rgba(34,165,82,0.35);
+      transition: all 0.25s;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--green-bright);
+      background: rgba(34,165,82,0.06);
+      transform: translateY(-2px);
+    }
+
+    /* Stats strip */
+    .hero-stats {
+      display: flex;
+      gap: 3rem;
+      margin-top: 4rem;
+      padding-top: 2.5rem;
+      border-top: 1px solid rgba(34,165,82,0.15);
+      animation: fade-up 0.8s 0.75s ease-out forwards;
+      opacity: 0;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat-item { text-align: center; }
+
+    .stat-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--green-mid);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Scroll indicator */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      animation: fade-up 1s 1.2s ease-out forwards;
+      opacity: 0;
+    }
+
+    .scroll-line {
+      width: 1px;
+      height: 50px;
+      background: linear-gradient(to bottom, var(--green-bright), transparent);
+      animation: scroll-line 2s ease-in-out infinite;
+    }
+
+    @keyframes scroll-line {
+      0%, 100% { transform: scaleY(1); opacity: 1; }
+      50% { transform: scaleY(0.5); opacity: 0.4; }
+    }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── SECTION SHARED ──────────────────────────── */
+    section { padding: 100px 5%; }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--green-bright);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-label::before {
+      content: '';
+      display: block;
+      width: 30px;
+      height: 2px;
+      background: var(--green-bright);
+      border-radius: 1px;
+    }
+
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--green-deep);
+    }
+
+    .section-title em {
+      font-style: italic;
+      color: var(--green-bright);
+    }
+
+    .section-body {
+      font-size: 1.05rem;
+      line-height: 1.9;
+      color: var(--text-mid);
+      font-weight: 300;
+      max-width: 680px;
+    }
+
+    /* ── ABOUT SECTION ───────────────────────────── */
+    .about {
+      background: var(--off-white);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .about::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 500px; height: 100%;
+      background: linear-gradient(135deg, transparent 40%, rgba(34,165,82,0.04) 100%);
+      pointer-events: none;
+    }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6rem;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .about-visual {
+      position: relative;
+    }
+
+    .about-card-main {
+      background: white;
+      border-radius: 24px;
+      padding: 2.5rem;
+      box-shadow: 0 20px 60px rgba(10,61,31,0.10), 0 0 0 1px rgba(34,165,82,0.08);
+      position: relative;
+      z-index: 2;
+    }
+
+    .about-card-accent {
+      position: absolute;
+      bottom: -24px;
+      right: -24px;
+      width: 80%;
+      height: 80%;
+      border-radius: 24px;
+      background: linear-gradient(135deg, var(--green-pale), var(--green-mist));
+      border: 1px solid rgba(34,165,82,0.15);
+      z-index: 1;
+    }
+
+    .icon-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 1.5rem;
+    }
+
+    .icon-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: var(--green-mist);
+      border: 1px solid rgba(34,165,82,0.2);
+      border-radius: 100px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--green-mid);
+    }
+
+    .about-metric {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--green-pale);
+    }
+
+    .metric-item { text-align: center; }
+
+    .metric-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--green-mid);
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .about-content .section-body { margin-top: 1.5rem; }
+
+    .about-content .section-body + .section-body { margin-top: 1rem; }
+
+    .about-highlight {
+      margin-top: 2rem;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, var(--green-pale), rgba(76,214,128,0.08));
+      border-left: 4px solid var(--green-bright);
+      border-radius: 0 12px 12px 0;
+    }
+
+    .about-highlight p {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 1.05rem;
+      color: var(--green-deep);
+      line-height: 1.6;
+    }
+
+    /* ── PROBLEM SECTION ────────────────────────── */
+    .problem {
+      background: var(--green-deep);
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .problem::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: 
+        radial-gradient(ellipse at 0% 100%, rgba(34,165,82,0.25) 0%, transparent 50%),
+        radial-gradient(ellipse at 100% 0%, rgba(76,214,128,0.10) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    /* Big decorative text */
+    .problem-bg-text {
+      position: absolute;
+      font-family: 'Playfair Display', serif;
+      font-size: 18vw;
+      font-weight: 900;
+      color: rgba(255,255,255,0.02);
+      top: -0.1em;
+      right: -0.05em;
+      line-height: 1;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .problem-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .problem .section-label { color: var(--green-light); }
+    .problem .section-label::before { background: var(--green-light); }
+    .problem .section-title { color: white; }
+
+    .problem-intro {
+      font-size: 1.2rem;
+      font-weight: 300;
+      line-height: 1.8;
+      color: rgba(255,255,255,0.7);
+      max-width: 680px;
+      margin-top: 1.5rem;
+    }
+
+    .problem-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      margin-top: 3.5rem;
+    }
+
+    .problem-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 2rem;
+      transition: background 0.3s, border-color 0.3s, transform 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .problem-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--green-bright), var(--green-light));
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.4s;
+    }
+
+    .problem-card:hover::before { transform: scaleX(1); }
+    .problem-card:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(34,165,82,0.3);
+      transform: translateY(-4px);
+    }
+
+    .problem-icon {
+      font-size: 2.4rem;
+      margin-bottom: 1rem;
+    }
+
+    .problem-card h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.75rem;
+    }
+
+    .problem-card p {
+      font-size: 0.9rem;
+      font-weight: 300;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.6);
+    }
+
+    /* ── HOW IT WORKS ────────────────────────────── */
+    .how {
+      background: white;
+      position: relative;
+    }
+
+    .how-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .how-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: end;
+      margin-bottom: 5rem;
+    }
+
+    .how .section-body { margin-top: 1.2rem; }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      gap: 2rem;
+      align-items: start;
+      position: relative;
+    }
+
+    .step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 39px;
+      top: 80px;
+      bottom: -20px;
+      width: 2px;
+      background: linear-gradient(to bottom, rgba(34,165,82,0.3), rgba(34,165,82,0.05));
+    }
+
+    .step-number-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+    }
+
+    .step-number {
+      width: 56px; height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, var(--green-deep), var(--green-mid));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: white;
+      box-shadow: 0 8px 24px rgba(10,61,31,0.25);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-icon-chip {
+      font-size: 1.4rem;
+    }
+
+    .step-content {
+      padding: 0 0 3.5rem 0;
+    }
+
+    .step-content h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      margin-bottom: 0.6rem;
+    }
+
+    .step-content p {
+      font-size: 0.97rem;
+      font-weight: 300;
+      line-height: 1.8;
+      color: var(--text-mid);
+    }
+
+    .step-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 0.75rem;
+      padding: 5px 12px;
+      background: var(--green-pale);
+      border-radius: 100px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--green-mid);
+    }
+
+    /* ── FEATURES ────────────────────────────────── */
+    .features {
+      background: var(--off-white);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .features::after {
+      content: '';
+      position: absolute;
+      bottom: -100px; right: -100px;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34,165,82,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .features-inner { max-width: 1200px; margin: 0 auto; }
+
+    .features-header { margin-bottom: 4rem; }
+    .features-header .section-body { margin-top: 1.2rem; }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+
+    .feature-card {
+      background: white;
+      border-radius: 20px;
+      padding: 2.2rem;
+      border: 1px solid rgba(34,165,82,0.08);
+      box-shadow: 0 4px 20px rgba(10,61,31,0.05);
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--green-bright), var(--green-light));
+      transform: scaleX(0);
+      transition: transform 0.3s;
+    }
+
+    .feature-card:hover {
+      box-shadow: 0 12px 40px rgba(10,61,31,0.12);
+      transform: translateY(-4px);
+      border-color: rgba(34,165,82,0.2);
+    }
+
+    .feature-card:hover::after { transform: scaleX(1); }
+
+    .feature-icon-wrap {
+      width: 56px; height: 56px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--green-pale), rgba(76,214,128,0.2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.7rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid rgba(34,165,82,0.15);
+    }
+
+    .feature-card h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      margin-bottom: 0.6rem;
+    }
+
+    .feature-card p {
+      font-size: 0.9rem;
+      font-weight: 300;
+      line-height: 1.75;
+      color: var(--text-mid);
+    }
+
+    /* ── CROPS SECTION ───────────────────────────── */
+    .crops {
+      background: white;
+    }
+
+    .crops-inner { max-width: 1200px; margin: 0 auto; }
+
+    .crops-header {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+      margin-bottom: 4rem;
+    }
+
+    .crops-header .section-body { margin-top: 1.2rem; }
+
+    .crops-visual {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .crop-pill {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 1.5rem 1rem;
+      background: var(--green-mist);
+      border: 1px solid rgba(34,165,82,0.15);
+      border-radius: 16px;
+      transition: all 0.25s;
+      cursor: default;
+    }
+
+    .crop-pill:hover {
+      background: var(--green-pale);
+      border-color: rgba(34,165,82,0.35);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(34,165,82,0.12);
+    }
+
+    .crop-emoji { font-size: 2rem; }
+
+    .crop-name {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--green-mid);
+    }
+
+    .crop-urdu {
+      font-family: 'Noto Nastaliq Urdu', serif;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      direction: rtl;
+    }
+
+    .crop-price {
+      font-family: 'Playfair Display', serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--green-bright);
+    }
+
+    /* ── TESTIMONIAL / QUOTE ─────────────────────── */
+    .quote-section {
+      background: linear-gradient(135deg, var(--green-deep) 0%, #0f4d27 50%, #0a3d1f 100%);
+      padding: 80px 5%;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .quote-section::before {
+      content: '"';
+      position: absolute;
+      font-family: 'Playfair Display', serif;
+      font-size: 30vw;
+      color: rgba(255,255,255,0.02);
+      top: -0.25em;
+      left: 50%;
+      transform: translateX(-50%);
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .quote-inner {
+      max-width: 800px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    blockquote {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(1.4rem, 3vw, 2.2rem);
+      font-style: italic;
+      font-weight: 400;
+      color: white;
+      line-height: 1.55;
+      margin-bottom: 2rem;
+    }
+
+    blockquote span { color: var(--green-light); }
+
+    .quote-attribution {
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.4);
+    }
+
+    /* ── CTA SECTION ────────────────────────────── */
+    .cta-section {
+      background: var(--off-white);
+      text-align: center;
+      padding: 120px 5%;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 800px; height: 800px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(34,165,82,0.07) 0%, transparent 70%);
+    }
+
+    .cta-inner {
+      max-width: 700px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .cta-inner .section-label {
+      justify-content: center;
+    }
+
+    .cta-inner .section-label::before { display: none; }
+
+    .cta-inner .section-title { text-align: center; }
+
+    .cta-inner .section-body {
+      text-align: center;
+      margin: 1.5rem auto 2.5rem;
+    }
+
+    .cta-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .cta-note {
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ── FOOTER ──────────────────────────────────── */
+    footer {
+      background: var(--green-deep);
+      color: white;
+      padding: 60px 5% 32px;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 3rem;
+      max-width: 1200px;
+      margin: 0 auto 3rem;
+    }
+
+    .footer-brand .nav-logo { margin-bottom: 1rem; }
+
+    .footer-brand p {
+      font-size: 0.875rem;
+      font-weight: 300;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.5);
+      max-width: 280px;
+    }
+
+    .footer-col h4 {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--green-light);
+      margin-bottom: 1.2rem;
+    }
+
+    .footer-col ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .footer-col ul li a {
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 300;
+      color: rgba(255,255,255,0.5);
+      transition: color 0.2s;
+    }
+
+    .footer-col ul li a:hover { color: var(--green-light); }
+
+    .footer-bottom {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .footer-bottom p {
+      font-size: 0.78rem;
+      font-weight: 300;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .footer-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+    }
+
+    /* ── REVEAL ANIMATIONS ───────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ── MOBILE ──────────────────────────────────── */
+    @media (max-width: 900px) {
+      .nav-links { display: none; }
+      .about-grid, .how-header, .crops-header, .footer-grid { grid-template-columns: 1fr; }
+      .about-card-accent { display: none; }
+      .problem-cards, .features-grid { grid-template-columns: 1fr; }
+      .crops-visual { grid-template-columns: repeat(2, 1fr); }
+      .hero-stats { gap: 1.5rem; }
+    }
+
+    @media (max-width: 600px) {
+      section { padding: 70px 5%; }
+      .crops-visual { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="nav-logo-icon">🌱</div>
+    <div>
+      <div class="nav-logo-text">KhetAI</div>
+      <div class="nav-logo-urdu">کھیت اے آئی</div>
+    </div>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#about">About</a></li>
+    <li><a href="#problem">The Problem</a></li>
+    <li><a href="#how">How It Works</a></li>
+    <li><a href="#features">Features</a></li>
+    <li><a href="/" class="nav-cta">Open App →</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <!-- Floating leaves -->
+  <div class="hero-leaves">
+    <svg class="leaf" style="left:10%;animation-duration:18s;animation-delay:0s;font-size:40px" viewBox="0 0 60 60" width="40" height="40"><path d="M30 5 C50 10 55 35 30 55 C5 35 10 10 30 5Z" fill="#22a552"/></svg>
+    <svg class="leaf" style="left:25%;animation-duration:22s;animation-delay:-4s;" viewBox="0 0 60 60" width="30" height="30"><path d="M30 5 C50 10 55 35 30 55 C5 35 10 10 30 5Z" fill="#1a6b3a"/></svg>
+    <svg class="leaf" style="left:70%;animation-duration:16s;animation-delay:-8s;" viewBox="0 0 60 60" width="35" height="35"><path d="M30 5 C50 10 55 35 30 55 C5 35 10 10 30 5Z" fill="#4cd680"/></svg>
+    <svg class="leaf" style="left:85%;animation-duration:20s;animation-delay:-12s;" viewBox="0 0 60 60" width="25" height="25"><path d="M30 5 C50 10 55 35 30 55 C5 35 10 10 30 5Z" fill="#22a552"/></svg>
+    <svg class="leaf" style="left:50%;animation-duration:14s;animation-delay:-6s;" viewBox="0 0 60 60" width="45" height="45"><path d="M30 5 C50 10 55 35 30 55 C5 35 10 10 30 5Z" fill="#0a3d1f"/></svg>
+  </div>
+
+  <div class="hero-badge">
+    <span class="hero-badge-dot"></span>
+    Pakistan's First AI Agriculture Negotiator
+  </div>
+
+  <h1 class="hero-headline">
+    From your <em>field</em> to the best<br/>deal — <em>autonomously.</em>
+  </h1>
+
+  <p class="hero-urdu">کھیت سے دستر خوان تک — خودکار طریقے سے</p>
+
+  <p class="hero-description">
+    KhetAI is an intelligent farming companion built for Pakistan's small-scale farmers. It diagnoses your crop, calculates your economic risk, and negotiates the best deal with vendors — all in one place, in your language.
+  </p>
+
+  <div class="hero-actions">
+    <a href="/" class="btn-primary"><span>Launch the App →</span></a>
+    <a href="#how" class="btn-secondary">See How It Works</a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="stat-item">
+      <div class="stat-num">6</div>
+      <div class="stat-label">Crop Types</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">10+</div>
+      <div class="stat-label">Vendor Network</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">₨ PKR</div>
+      <div class="stat-label">Local Currency</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">AI</div>
+      <div class="stat-label">Grok Powered</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">اردو</div>
+      <div class="stat-label">Voice Support</div>
+    </div>
+  </div>
+
+  <div class="scroll-indicator">
+    <span>Scroll</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section class="about" id="about">
+  <div class="about-grid">
+    <div class="about-visual reveal">
+      <div class="about-card-main">
+        <div class="icon-row">
+          <span class="icon-chip">🧠 AI-Powered</span>
+          <span class="icon-chip">🌾 Pakistan</span>
+        </div>
+        <p style="font-family:'Playfair Display',serif;font-size:1.15rem;font-weight:600;color:var(--green-deep);line-height:1.5;margin-bottom:1.2rem;">
+          "A farmer should never have to choose between knowing what's wrong and being able to fix it."
+        </p>
+        <p style="font-size:0.9rem;font-weight:300;line-height:1.7;color:var(--text-mid);">
+          KhetAI bridges the gap between agricultural knowledge and economic action — turning AI insights into real deals, in real time, for real farmers across Punjab and Sindh.
+        </p>
+        <div class="about-metric">
+          <div class="metric-item">
+            <div class="metric-num">87%</div>
+            <div class="metric-label">Diagnosis Accuracy</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-num">18%</div>
+            <div class="metric-label">Avg. Savings</div>
+          </div>
+          <div class="metric-item">
+            <div class="metric-num">2 days</div>
+            <div class="metric-label">Avg. Delivery</div>
+          </div>
+        </div>
+      </div>
+      <div class="about-card-accent"></div>
+    </div>
+
+    <div class="about-content">
+      <div class="section-label reveal">Who We Are</div>
+      <h2 class="section-title reveal reveal-delay-1">Built for the <em>Kisan,</em><br/>not the corporation.</h2>
+
+      <p class="section-body reveal reveal-delay-2">
+        KhetAI was created with a singular mission: to give Pakistan's 8+ million small-scale farmers access to the kind of intelligent, automated decision-making that large agribusinesses take for granted. We are an AI-first agricultural platform that speaks your language — literally.
+      </p>
+
+      <p class="section-body reveal reveal-delay-3">
+        We understand that a wheat farmer in Sahiwal doesn't have time to research pesticide vendors, compare prices, or negotiate delivery schedules. That's why we built an autonomous agent that does all of that for you — transparently, quickly, and at no extra cost.
+      </p>
+
+      <div class="about-highlight reveal reveal-delay-4">
+        <p>"Every farmer deserves the same quality of agricultural intelligence as a Fortune 500 agribusiness. KhetAI makes that a reality."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem" id="problem">
+  <div class="problem-bg-text">GAP</div>
+  <div class="problem-inner">
+    <div class="section-label reveal">The Challenge</div>
+    <h2 class="section-title reveal reveal-delay-1">Pakistan's farmers face an<br/><em>Advice-Action Gap.</em></h2>
+    <p class="problem-intro reveal reveal-delay-2">
+      Millions of farmers across Punjab and Sindh receive agricultural advice they cannot act upon. They know their crops are diseased. They know which pesticide they need. But they lack the time, connections, and negotiating power to secure the best deal. Knowledge without execution is lost potential.
+    </p>
+
+    <div class="problem-cards">
+      <div class="problem-card reveal reveal-delay-1">
+        <div class="problem-icon">🔍</div>
+        <h3>Diagnosis Without Action</h3>
+        <p>Farmers can identify crop diseases through extension workers or basic apps — but translating that diagnosis into a purchased solution takes days of effort, phone calls, and market visits that many cannot afford.</p>
+      </div>
+      <div class="problem-card reveal reveal-delay-2">
+        <div class="problem-icon">💸</div>
+        <h3>No Negotiating Power</h3>
+        <p>Individual small farmers purchasing pesticides or fertilizers in small quantities have virtually no leverage with vendors. They pay full retail price while large farms secure bulk discounts of 15–25%. KhetAI changes this equation.</p>
+      </div>
+      <div class="problem-card reveal reveal-delay-3">
+        <div class="problem-icon">⏳</div>
+        <h3>Time Is the Harvest</h3>
+        <p>Crop disease spreads exponentially. Every day spent searching for the right vendor, comparing prices, and arranging logistics is a day of escalating crop loss. Speed is not a luxury — it is survival for a subsistence farmer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <div class="how-header">
+      <div>
+        <div class="section-label reveal">The Process</div>
+        <h2 class="section-title reveal reveal-delay-1">From photo to <em>deal confirmed</em> in minutes.</h2>
+      </div>
+      <p class="section-body reveal reveal-delay-2">
+        KhetAI's autonomous pipeline turns a single crop photo into a fully negotiated vendor agreement — with economic analysis, risk modeling, and parametric insurance assessment built in at every step.
+      </p>
+    </div>
+
+    <div class="steps">
+      <div class="step reveal">
+        <div class="step-number-wrap">
+          <div class="step-number">1</div>
+          <div class="step-icon-chip">📸</div>
+        </div>
+        <div class="step-content">
+          <h3>Photograph Your Crop</h3>
+          <p>Open KhetAI on your phone and take a photo of the affected crop area. Our system accepts any standard mobile camera image and works even under difficult field lighting conditions. No special equipment is needed — just the phone in your pocket.</p>
+          <span class="step-tag">⚡ Grok Vision AI</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-number-wrap">
+          <div class="step-number">2</div>
+          <div class="step-icon-chip">🔬</div>
+        </div>
+        <div class="step-content">
+          <h3>AI Diagnoses Disease & Severity</h3>
+          <p>Our Grok Vision AI model analyzes your image and identifies the specific disease or pest infestation — from Fall Armyworm to Rice Blast — with confidence scores and severity ratings. You receive a structured report in both English and Urdu, with immediate action recommendations and a read-aloud voice option.</p>
+          <span class="step-tag">🎯 87% Accuracy</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-number-wrap">
+          <div class="step-number">3</div>
+          <div class="step-icon-chip">📊</div>
+        </div>
+        <div class="step-content">
+          <h3>Economic Loss Calculation</h3>
+          <p>Our Monte Carlo simulation engine runs 10,000 economic scenarios based on your crop type, acreage, current market prices in PKR, and disease severity. You see exactly how much you stand to lose without treatment, how much treatment costs, and your projected return on investment — in plain language, in your currency.</p>
+          <span class="step-tag">📈 10,000 Simulations</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-number-wrap">
+          <div class="step-number">4</div>
+          <div class="step-icon-chip">🤝</div>
+        </div>
+        <div class="step-content">
+          <h3>Autonomous Vendor Negotiation</h3>
+          <p>KhetAI's AI negotiation agent contacts multiple verified vendors across Punjab and Sindh on your behalf. It presents your requirements, negotiates for bulk discounts, evaluates delivery timelines, and returns a ranked list of offers with a clear recommendation. You see the entire negotiation conversation in real time.</p>
+          <span class="step-tag">💰 Avg. 18% Savings</span>
+        </div>
+      </div>
+
+      <div class="step reveal">
+        <div class="step-number-wrap">
+          <div class="step-number">5</div>
+          <div class="step-icon-chip">✅</div>
+        </div>
+        <div class="step-content">
+          <h3>One-Tap Confirm & Insurance Trigger</h3>
+          <p>Review the best deal and confirm with a single tap. KhetAI simultaneously flags your situation for parametric insurance assessment — if your crop loss meets the threshold, an insurance claim is automatically initiated without requiring a physical inspection or paperwork. Your farm is protected, your deal is done.</p>
+          <span class="step-tag">🛡️ Auto Insurance Trigger</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="features-inner">
+    <div class="features-header">
+      <div class="section-label reveal">Capabilities</div>
+      <h2 class="section-title reveal reveal-delay-1">Everything a modern<br/><em>kisan</em> needs.</h2>
+      <p class="section-body reveal reveal-delay-2">Five integrated modules that work together to give Pakistan's farmers unprecedented control over their agricultural outcomes.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon-wrap">🧪</div>
+        <h3>AI Crop Diagnosis</h3>
+        <p>Upload any crop photo for instant Grok Vision analysis. Identifies 50+ diseases and pests with severity classification, confidence scoring, and multilingual reports in English and Urdu.</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon-wrap">📉</div>
+        <h3>Economic Risk Engine</h3>
+        <p>Monte Carlo simulations calculate your net farm value, projected crop loss in PKR, treatment ROI, and best/worst-case scenarios — tailored to real Pakistan market prices and your specific acreage.</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon-wrap">🤖</div>
+        <h3>Autonomous Negotiation Agent</h3>
+        <p>Our AI agent contacts verified vendors, presents your bulk requirements, negotiates discounts, and returns a ranked deal list. Watch the entire negotiation unfold in a real-time chat interface.</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon-wrap">🗺️</div>
+        <h3>Vendor Logistics Map</h3>
+        <p>An interactive dark map showing verified agri vendors across Punjab and Sindh. Filter by pesticides, fertilizers, seeds, or premium suppliers. View cooperative aggregation zones for group purchasing.</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon-wrap">🛡️</div>
+        <h3>Parametric Insurance</h3>
+        <p>Automatic insurance claim triggers based on disease severity thresholds — no manual inspection required. Two policy tiers covering pest damage, drought, flood, and market price drops.</p>
+      </div>
+
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon-wrap">🔊</div>
+        <h3>Urdu Voice Interface</h3>
+        <p>Every diagnosis, negotiation summary, and market alert can be read aloud in both English and Urdu using the Web Speech API. Designed for farmers who prefer listening over reading small text.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CROPS -->
+<section class="crops" id="crops">
+  <div class="crops-inner">
+    <div class="crops-header">
+      <div>
+        <div class="section-label reveal">Coverage</div>
+        <h2 class="section-title reveal reveal-delay-1">Six major <em>Pakistani</em><br/>crops supported.</h2>
+        <p class="section-body reveal reveal-delay-2">
+          KhetAI is trained and calibrated for the crops that matter most to Pakistan's agricultural economy. Each crop has its own disease database, market price model, input cost structure, and vendor network — all reflected in real PKR values updated regularly.
+        </p>
+        <p class="section-body reveal reveal-delay-3" style="margin-top:1rem;">
+          Whether you grow wheat in Sahiwal, cotton in Multan, rice in Sheikhupura, or sugarcane in Faisalabad — KhetAI understands your specific context and gives you advice grounded in local reality, not generic agricultural textbooks.
+        </p>
+      </div>
+
+      <div class="crops-visual">
+        <div class="crop-pill reveal reveal-delay-1">
+          <span class="crop-emoji">🌾</span>
+          <span class="crop-name">Wheat</span>
+          <span class="crop-urdu">گندم</span>
+          <span class="crop-price">₨3,800/مند</span>
+        </div>
+        <div class="crop-pill reveal reveal-delay-2">
+          <span class="crop-emoji">🌿</span>
+          <span class="crop-name">Cotton</span>
+          <span class="crop-urdu">کپاس</span>
+          <span class="crop-price">₨8,500/مند</span>
+        </div>
+        <div class="crop-pill reveal reveal-delay-3">
+          <span class="crop-emoji">🌾</span>
+          <span class="crop-name">Rice</span>
+          <span class="crop-urdu">چاول</span>
+          <span class="crop-price">₨4,800/مند</span>
+        </div>
+        <div class="crop-pill reveal reveal-delay-1">
+          <span class="crop-emoji">🎋</span>
+          <span class="crop-name">Sugarcane</span>
+          <span class="crop-urdu">گنا</span>
+          <span class="crop-price">₨500/مند</span>
+        </div>
+        <div class="crop-pill reveal reveal-delay-2">
+          <span class="crop-emoji">🌽</span>
+          <span class="crop-name">Maize</span>
+          <span class="crop-urdu">مکئی</span>
+          <span class="crop-price">₨2,700/مند</span>
+        </div>
+        <div class="crop-pill reveal reveal-delay-3">
+          <span class="crop-emoji">🥬</span>
+          <span class="crop-name">Vegetables</span>
+          <span class="crop-urdu">سبزیاں</span>
+          <span class="crop-price">₨4,000/مند</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTE -->
+<div class="quote-section">
+  <div class="quote-inner">
+    <blockquote>
+      "In Pakistan, <span>67% of farmers</span> report receiving accurate crop advice but being unable to act on it due to market barriers, vendor inaccessibility, and lack of negotiating power. KhetAI was built to close this gap — permanently."
+    </blockquote>
+    <div class="quote-attribution">— The KhetAI Vision Statement</div>
+  </div>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-inner">
+    <div class="section-label reveal">Get Started</div>
+    <h2 class="section-title reveal reveal-delay-1">Your farm's <em>intelligence</em><br/>is waiting.</h2>
+    <p class="section-body reveal reveal-delay-2">
+      Open KhetAI now and take your first step toward smarter, more profitable farming. No registration required. Upload a photo, run a demo, and see exactly how much you could save — in under two minutes.
+    </p>
+    <div class="cta-actions reveal reveal-delay-3">
+      <a href="/" class="btn-primary"><span>Launch KhetAI App →</span></a>
+      <a href="#how" class="btn-secondary">Watch How It Works</a>
+    </div>
+    <p class="cta-note reveal reveal-delay-4">✅ Free to use &nbsp;·&nbsp; 🌐 Works in English & Urdu &nbsp;·&nbsp; 📱 Mobile-optimised</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <a href="#" class="nav-logo">
+        <div class="nav-logo-icon">🌱</div>
+        <div>
+          <div class="nav-logo-text" style="color:white;">KhetAI</div>
+          <div class="nav-logo-urdu">کھیت اے آئی</div>
+        </div>
+      </a>
+      <p>Farm-to-Fork Autonomous Negotiator for Pakistan's small-scale farmers. Built with Grok AI, FastAPI, and a deep respect for the kisan.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Platform</h4>
+      <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="/#/diagnose">Diagnose</a></li>
+        <li><a href="/#/negotiate">Negotiate</a></li>
+        <li><a href="/#/logistics">Logistics Map</a></li>
+        <li><a href="/#/insurance">Insurance</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Crops</h4>
+      <ul>
+        <li><a href="#">Wheat گندم</a></li>
+        <li><a href="#">Cotton کپاس</a></li>
+        <li><a href="#">Rice چاول</a></li>
+        <li><a href="#">Sugarcane گنا</a></li>
+        <li><a href="#">Maize مکئی</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Regions</h4>
+      <ul>
+        <li><a href="#">Lahore, Punjab</a></li>
+        <li><a href="#">Faisalabad, Punjab</a></li>
+        <li><a href="#">Multan, Punjab</a></li>
+        <li><a href="#">Hyderabad, Sindh</a></li>
+        <li><a href="#">Karachi, Sindh</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 KhetAI — کھیت اے آئی. Built for Pakistan's farmers. Powered by Grok AI.</p>
+    <div class="footer-badge">🌾 Made with love for the Kisan</div>
+  </div>
+</footer>
+
+<script>
+  // Intersection Observer for reveal animations
+  const revealEls = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+  revealEls.forEach(el => observer.observe(el));
+
+  // Smooth nav background on scroll
+  const nav = document.querySelector('nav');
+  window.addEventListener('scroll', () => {
+    if (window.scrollY > 60) {
+      nav.style.boxShadow = '0 4px 32px rgba(10,61,31,0.12)';
+    } else {
+      nav.style.boxShadow = '0 2px 24px rgba(10,61,31,0.06)';
+    }
+  });
+
+  // Animated counter for hero stats
+  function animateCounter(el, target, suffix = '') {
+    let current = 0;
+    const step = target / 40;
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= target) {
+        current = target;
+        clearInterval(timer);
+      }
+      el.textContent = Math.round(current) + suffix;
+    }, 40);
+  }
+
+  // Trigger counters when visible
+  const statNums = document.querySelectorAll('.stat-num');
+  const statObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        const text = el.textContent;
+        if (text === '6') animateCounter(el, 6);
+        if (text.includes('10+')) { setTimeout(() => { el.textContent = '10+'; }, 400); }
+        statObserver.unobserve(el);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  statNums.forEach(el => statObserver.observe(el));
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Dependencies
+frontend/node_modules/
+backend/node_modules/
+node_modules/
+
+# Python
+backend/__pycache__/
+backend/*.pyc
+backend/khetai_venv/
+*.venv/
+.venv/
+__pycache__/
+
+# Environment secrets
+backend/.env
+.env
+
+# Build output
+frontend/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Model files (too large for GitHub)
+*.bin
+*.keras
