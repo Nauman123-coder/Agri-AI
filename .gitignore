@@ -22,6 +22,6 @@ frontend/build/
 .DS_Store
 Thumbs.db
 
-# Model files (too large for GitHub)
-*.bin
-*.keras
+# Model files - keeping tfjs model for deployment
+# *.bin
+# *.keras
