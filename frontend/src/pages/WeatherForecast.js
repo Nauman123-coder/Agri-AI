@@ -5,12 +5,15 @@
  * - Always shows ALL diseases for selected crop with real reasons
  * - Clear "Why?" explanation for every risk level
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Cloud, Droplets, Thermometer, Wind,
   ChevronDown, MapPin, ChevronLeft, Shield,
-  AlertTriangle, Info, ChevronRight
+  AlertTriangle, Info, ChevronRight,
+  MessageCircle, Sparkles, Send, Leaf,
+  Droplet, Sun, Wind as WindIcon, CheckCircle2,
+  RefreshCw, Copy, Check
 } from 'lucide-react';
 
 // ── Cities with realistic seasonal base weather ───────────────────────────────
@@ -948,28 +951,224 @@ function Pill({ Icon, value, label, color }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CROP KNOWLEDGE BASE — Ideal growing conditions for every crop
+// Used to compare against actual forecast and generate action plans
+// ─────────────────────────────────────────────────────────────────────────────
+const CROP_KNOWLEDGE = {
+  wheat:       { tempMin:12, tempMax:22, humidMin:50, humidMax:70, rainMin:3,  rainMax:10, season:'Rabi (Oct–Mar)', waterNeed:'Low-Medium', soilPH:'6.0–7.5', keyNutrients:'Nitrogen (tillering), Phosphorus (root), Potassium (grain fill)' },
+  rice:        { tempMin:22, tempMax:35, humidMin:70, humidMax:90, rainMin:10, rainMax:25, season:'Kharif (Jun–Oct)', waterNeed:'Very High', soilPH:'5.5–6.5', keyNutrients:'Nitrogen (split doses), Zinc, Silica' },
+  maize:       { tempMin:18, tempMax:32, humidMin:50, humidMax:75, rainMin:5,  rainMax:15, season:'Kharif (Apr–Aug)', waterNeed:'Medium', soilPH:'5.8–7.0', keyNutrients:'Nitrogen (heavy feeder), Phosphorus, Potassium' },
+  cotton:      { tempMin:25, tempMax:38, humidMin:40, humidMax:65, rainMin:0,  rainMax:8,  season:'Kharif (Apr–Oct)', waterNeed:'Medium', soilPH:'6.0–8.0', keyNutrients:'Nitrogen, Potassium (boll fill), Boron' },
+  sugarcane:   { tempMin:24, tempMax:38, humidMin:60, humidMax:80, rainMin:8,  rainMax:20, season:'Year-round (15 months)', waterNeed:'Very High', soilPH:'6.0–7.5', keyNutrients:'Nitrogen, Phosphorus, Potassium, Silicon' },
+  potato:      { tempMin:15, tempMax:22, humidMin:60, humidMax:80, rainMin:5,  rainMax:12, season:'Rabi (Oct–Jan)', waterNeed:'Medium', soilPH:'5.0–6.5', keyNutrients:'Potassium (tuber), Phosphorus, Calcium' },
+  tomato:      { tempMin:18, tempMax:28, humidMin:55, humidMax:75, rainMin:3,  rainMax:10, season:'Spring/Autumn', waterNeed:'Medium-High', soilPH:'6.0–6.8', keyNutrients:'Calcium (prevents BER), Magnesium, Potassium' },
+  onion:       { tempMin:13, tempMax:24, humidMin:50, humidMax:70, rainMin:2,  rainMax:8,  season:'Rabi (Oct–Mar)', waterNeed:'Low-Medium', soilPH:'6.0–7.0', keyNutrients:'Sulfur (flavor/size), Phosphorus, Nitrogen' },
+  chilli:      { tempMin:22, tempMax:32, humidMin:50, humidMax:70, rainMin:3,  rainMax:10, season:'Kharif (Apr–Sep)', waterNeed:'Medium', soilPH:'6.0–7.0', keyNutrients:'Potassium, Calcium, Magnesium' },
+  mango:       { tempMin:24, tempMax:38, humidMin:40, humidMax:65, rainMin:0,  rainMax:5,  season:'Flowering: Jan–Mar; Harvest: May–Jul', waterNeed:'Low (drought tolerant)', soilPH:'5.5–7.5', keyNutrients:'Potassium (fruit quality), Boron (flowering), Zinc' },
+  citrus:      { tempMin:15, tempMax:30, humidMin:45, humidMax:70, rainMin:2,  rainMax:10, season:'Harvest: Nov–Feb', waterNeed:'Medium', soilPH:'5.5–6.5', keyNutrients:'Zinc, Iron, Boron (micronutrients critical)' },
+  mustard:     { tempMin:10, tempMax:22, humidMin:45, humidMax:65, rainMin:2,  rainMax:8,  season:'Rabi (Oct–Feb)', waterNeed:'Low', soilPH:'6.0–7.5', keyNutrients:'Sulfur (oil content), Nitrogen, Phosphorus' },
+  chickpea:    { tempMin:15, tempMax:28, humidMin:45, humidMax:65, rainMin:2,  rainMax:8,  season:'Rabi (Oct–Mar)', waterNeed:'Low', soilPH:'6.0–8.0', keyNutrients:'Rhizobium inoculation, Phosphorus, Zinc' },
+  rice_default:{ tempMin:22, tempMax:35, humidMin:70, humidMax:90, rainMin:10, rainMax:25, season:'Kharif', waterNeed:'High', soilPH:'5.5–7.0', keyNutrients:'Nitrogen, Phosphorus, Potassium' },
+};
+const DEFAULT_CROP_KNOWLEDGE = { tempMin:18, tempMax:30, humidMin:50, humidMax:75, rainMin:3, rainMax:12, season:'Seasonal', waterNeed:'Medium', soilPH:'6.0–7.5', keyNutrients:'NPK balanced, micronutrients as needed' };
+
+function getCropKnowledge(cropId) {
+  return CROP_KNOWLEDGE[cropId] || DEFAULT_CROP_KNOWLEDGE;
+}
+
+// ── Generate weather-based action plan using Claude API ───────────────────────
+async function generateActionPlan(crop, city, forecast, knowledge) {
+  const weatherSummary = forecast.map((d, i) =>
+    `${d.day}: ${d.temp}°C, humidity ${d.humidity}%, wind ${d.wind}km/h, rain ${d.rain}mm — top disease risk: ${d.diseases[0]?.name || 'none'} (${d.topScore}%)`
+  ).join('\n');
+
+  const topDiseases = forecast[0]?.diseases.slice(0, 3).map(d => `${d.name} (${d.score}% risk)`).join(', ') || 'none';
+
+  const prompt = `You are an expert Pakistani agricultural advisor. A farmer is growing ${crop.name} (${crop.urdu}) in ${city.name}.
+
+IDEAL CONDITIONS FOR ${crop.name.toUpperCase()}:
+- Temperature: ${knowledge.tempMin}–${knowledge.tempMax}°C
+- Humidity: ${knowledge.humidMin}–${knowledge.humidMax}%
+- Rain: ${knowledge.rainMin}–${knowledge.rainMax}mm/day
+- Season: ${knowledge.season}
+- Water needs: ${knowledge.waterNeed}
+- Soil pH: ${knowledge.soilPH}
+- Key nutrients: ${knowledge.keyNutrients}
+
+5-DAY WEATHER FORECAST FOR ${city.name}:
+${weatherSummary}
+
+TOP DISEASE RISKS TODAY: ${topDiseases}
+
+Based on this specific forecast vs ideal conditions, generate a structured 5-day action plan. For each day mention:
+1. Whether conditions are ideal, stressful, or dangerous for the crop
+2. What the farmer MUST DO that day (irrigation, spraying, fertilizing, scouting, harvesting prep)
+3. What to AVOID
+4. Any urgent warnings
+
+Format as JSON with this exact structure (no markdown, pure JSON):
+{
+  "overallAssessment": "2-3 sentence overall summary of the forecast for this crop",
+  "urgentAlert": "null or a single urgent warning string if any critical risk exists",
+  "days": [
+    {
+      "day": "Today",
+      "status": "ideal|good|caution|stress|danger",
+      "statusReason": "Why (1 sentence based on temp/humidity vs ideal)",
+      "actions": ["action 1", "action 2", "action 3"],
+      "avoid": "What to avoid today (1 sentence)",
+      "irrigate": "none|light|normal|heavy|skip",
+      "irrigateReason": "Why this irrigation level"
+    }
+  ],
+  "weeklyTips": ["tip 1", "tip 2", "tip 3"],
+  "fertilizerAdvice": "Specific fertilizer advice for this week based on conditions",
+  "harvestNote": "Any harvest timing note if relevant, else null"
+}`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  const data = await response.json();
+  const text = data.content?.map(b => b.text || '').join('') || '';
+  const clean = text.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
+}
+
+// ── Chat with AI about crop + weather ────────────────────────────────────────
+async function chatWithAI(messages, crop, city, forecast, knowledge) {
+  const ctx = `You are KhetAI, an expert Pakistani agricultural advisor. The farmer is growing ${crop.name} (${crop.urdu}) in ${city.name}. Today: ${forecast[0]?.temp}°C, humidity ${forecast[0]?.humidity}%, rain ${forecast[0]?.rain}mm. Top disease risk: ${forecast[0]?.diseases[0]?.name} (${forecast[0]?.topScore}%). Ideal temp for ${crop.name}: ${knowledge.tempMin}–${knowledge.tempMax}°C. Answer in simple English (and Urdu if asked). Be concise, practical, specific to Pakistani farming.`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 600,
+      system: ctx,
+      messages,
+    }),
+  });
+  const data = await response.json();
+  return data.content?.map(b => b.text || '').join('') || 'Sorry, could not get a response.';
+}
+
+// ── STATUS color map ──────────────────────────────────────────────────────────
+const STATUS_CFG = {
+  ideal:   { color: '#4ade80', bg: 'rgba(74,222,128,0.1)',  emoji: '✅', label: 'Ideal' },
+  good:    { color: '#86efac', bg: 'rgba(134,239,172,0.1)', emoji: '🌱', label: 'Good' },
+  caution: { color: '#eab308', bg: 'rgba(234,179,8,0.1)',   emoji: '⚡', label: 'Caution' },
+  stress:  { color: '#f97316', bg: 'rgba(249,115,22,0.1)',  emoji: '⚠️', label: 'Stress' },
+  danger:  { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   emoji: '🚨', label: 'Danger' },
+};
+
+const IRRIGATE_CFG = {
+  none:   { color: '#94a3b8', emoji: '🚫', label: 'No irrigation' },
+  skip:   { color: '#94a3b8', emoji: '⏭️', label: 'Skip today' },
+  light:  { color: '#60a5fa', emoji: '💧', label: 'Light irrigation' },
+  normal: { color: '#60a5fa', emoji: '💧💧', label: 'Normal irrigation' },
+  heavy:  { color: '#818cf8', emoji: '💧💧💧', label: 'Heavy irrigation' },
+};
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function WeatherForecast() {
-  const [step, setStep]       = useState('pick_crop');
-  const [cropId, setCropId]   = useState(null);
-  const [city, setCity]       = useState(CITIES[0]);
-  const [forecast, setForecast] = useState([]);
-  const [dayIdx, setDayIdx]   = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [showCity, setShowCity] = useState(false);
-  const [search, setSearch]   = useState('');
+  const [step, setStep]             = useState('pick_crop');
+  const [cropId, setCropId]         = useState(null);
+  const [city, setCity]             = useState(CITIES[0]);
+  const [forecast, setForecast]     = useState([]);
+  const [dayIdx, setDayIdx]         = useState(0);
+  const [loading, setLoading]       = useState(false);
+  const [showCity, setShowCity]     = useState(false);
+  const [search, setSearch]         = useState('');
   const [expandedDisease, setExpandedDisease] = useState(null);
+  const [activeTab, setActiveTab]   = useState('disease'); // 'disease' | 'actions' | 'chat'
+
+  // Action plan state
+  const [actionPlan, setActionPlan]         = useState(null);
+  const [actionLoading, setActionLoading]   = useState(false);
+  const [actionError, setActionError]       = useState(null);
+  const [expandedDay, setExpandedDay]       = useState(0);
+
+  // Chat state
+  const [chatMessages, setChatMessages]     = useState([]);
+  const [chatInput, setChatInput]           = useState('');
+  const [chatLoading, setChatLoading]       = useState(false);
+  const chatEndRef = useRef(null);
 
   const crop = ALL_CROPS.find(c => c.id === cropId);
 
   const loadForecast = (cid, c) => {
     setLoading(true);
     setExpandedDisease(null);
+    setActionPlan(null);
+    setActionError(null);
+    setChatMessages([]);
     setTimeout(() => { setForecast(genForecast(c, cid)); setLoading(false); }, 500);
   };
 
-  const selectCrop = (id) => { setCropId(id); setStep('forecast'); loadForecast(id, city); };
+  const selectCrop = (id) => { setCropId(id); setStep('forecast'); setActiveTab('disease'); loadForecast(id, city); };
   const changeCity = (c) => { setCity(c); setShowCity(false); if (cropId) loadForecast(cropId, c); };
+
+  // Auto-scroll chat
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+
+  // Load action plan when tab is switched to actions
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'actions' && !actionPlan && !actionLoading && forecast.length > 0 && crop) {
+      fetchActionPlan();
+    }
+    if (tab === 'chat' && chatMessages.length === 0 && crop) {
+      // Seed with a welcome message
+      setChatMessages([{
+        role: 'assistant',
+        content: `Hello! 👋 I'm your KhetAI advisor for **${crop.name}** in **${city.name}**.\n\nToday's conditions: **${forecast[0]?.temp}°C**, **${forecast[0]?.humidity}%** humidity, **${forecast[0]?.rain}mm** rain.\n\nAsk me anything about growing ${crop.name} — irrigation, fertilizer, disease control, or what to do based on this week's weather!`,
+      }]);
+    }
+  };
+
+  const fetchActionPlan = async () => {
+    if (!crop || forecast.length === 0) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const knowledge = getCropKnowledge(cropId);
+      const plan = await generateActionPlan(crop, city, forecast, knowledge);
+      setActionPlan(plan);
+    } catch (e) {
+      setActionError('Could not load action plan. Please check your connection.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const sendChat = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    const userMsg = { role: 'user', content: text };
+    const newMsgs = [...chatMessages, userMsg];
+    setChatMessages(newMsgs);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const knowledge = getCropKnowledge(cropId);
+      // Pass only actual user/assistant messages (skip seeded welcome)
+      const apiMsgs = newMsgs.filter(m => !(m.role === 'assistant' && m.content.startsWith('Hello! 👋')));
+      const reply = await chatWithAI(apiMsgs.length > 0 ? apiMsgs : [userMsg], crop, city, forecast, knowledge);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Network error. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   const filteredCats = CROP_CATEGORIES.map(cat => ({
     ...cat,
@@ -978,6 +1177,13 @@ export default function WeatherForecast() {
 
   const day = forecast[dayIdx];
   const rc  = day ? (RISK_CFG[day.topLevel] || RISK_CFG.safe) : RISK_CFG.safe;
+
+  // Tab definitions
+  const TABS = [
+    { id: 'disease', label: 'Disease Risk', emoji: '🦠' },
+    { id: 'actions', label: 'Crop Actions', emoji: '🌱' },
+    { id: 'chat',    label: 'AI Advisor',   emoji: '💬' },
+  ];
 
   // ── CROP PICKER ────────────────────────────────────────────────────────────
   if (step === 'pick_crop') return (
@@ -1066,8 +1272,8 @@ export default function WeatherForecast() {
         ))}</div>
       ) : (
         <>
-          {/* Day strip */}
-          <div className="flex gap-2 overflow-x-auto pb-1 mb-5" style={{ scrollbarWidth: 'none' }}>
+          {/* Day strip — always visible */}
+          <div className="flex gap-2 overflow-x-auto pb-1 mb-4" style={{ scrollbarWidth: 'none' }}>
             {forecast.map((d, i) => {
               const rc2 = RISK_CFG[d.topLevel] || RISK_CFG.safe;
               return (
@@ -1083,9 +1289,28 @@ export default function WeatherForecast() {
             })}
           </div>
 
-          {day && (
+          {/* TAB BAR */}
+          <div className="flex gap-2 mb-5">
+            {TABS.map(tab => (
+              <motion.button key={tab.id} whileTap={{ scale: 0.95 }}
+                onClick={() => handleTabChange(tab.id)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold"
+                style={{
+                  background: activeTab === tab.id ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${activeTab === tab.id ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                  color: activeTab === tab.id ? '#4ade80' : 'rgba(255,255,255,0.4)',
+                  transition: 'all 0.2s',
+                }}>
+                <span>{tab.emoji}</span>
+                <span style={{ fontSize: 10 }}>{tab.label}</span>
+              </motion.button>
+            ))}
+          </div>
+
+          {/* ── TAB: DISEASE RISK ─────────────────────────────────────── */}
+          {activeTab === 'disease' && day && (
             <AnimatePresence mode="wait">
-              <motion.div key={dayIdx} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <motion.div key={`disease-${dayIdx}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
 
                 {/* Overall risk banner */}
                 <div style={{ background: rc.bg, border: `1px solid ${rc.color}35`, borderRadius: 20, padding: '18px', marginBottom: 16 }}>
@@ -1112,7 +1337,6 @@ export default function WeatherForecast() {
                   </div>
                 </div>
 
-                {/* Disease list */}
                 <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginBottom: 12, letterSpacing: '0.1em' }}>
                   ALL DISEASES FOR {crop?.name?.toUpperCase()} — TAP FOR DETAILS
                 </p>
@@ -1126,10 +1350,8 @@ export default function WeatherForecast() {
                         <motion.button whileTap={{ scale: 0.98 }} onClick={() => setExpandedDisease(isOpen ? null : i)}
                           className="w-full text-left"
                           style={{ background: isOpen ? rc3.bg : 'rgba(255,255,255,0.03)', border: `1px solid ${isOpen ? rc3.color + '40' : 'rgba(255,255,255,0.08)'}`, borderLeft: `3px solid ${rc3.color}`, borderRadius: 14, padding: '13px 15px', transition: 'all 0.2s' }}>
-
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 flex-1">
-                              {/* Risk score bar + label */}
                               <div style={{ width: 42, flexShrink: 0 }}>
                                 <p style={{ color: rc3.color, fontWeight: 900, fontSize: 18, margin: 0, lineHeight: 1 }}>{d.score}%</p>
                                 <p style={{ color: rc3.color, fontSize: 8, margin: 0, fontFamily: "'JetBrains Mono', monospace" }}>{rc3.label}</p>
@@ -1144,34 +1366,24 @@ export default function WeatherForecast() {
                               <ChevronRight size={14} style={{ color: 'rgba(255,255,255,0.3)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
                             </div>
                           </div>
-
-                          {/* Risk bar */}
                           <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 4, height: 4, marginTop: 10 }}>
                             <motion.div initial={{ width: 0 }} animate={{ width: `${d.score}%` }}
                               transition={{ delay: i * 0.08 + 0.2, duration: 0.7, ease: 'easeOut' }}
                               style={{ background: rc3.color, height: '100%', borderRadius: 4 }} />
                           </div>
                         </motion.button>
-
-                        {/* Expanded details */}
                         <AnimatePresence>
                           {isOpen && (
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
                               style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${rc3.color}20`, borderTop: 'none', borderRadius: '0 0 14px 14px', overflow: 'hidden' }}>
                               <div style={{ padding: '14px 15px' }}>
-
-                                {/* WHY section */}
                                 <div style={{ background: rc3.bg, border: `1px solid ${rc3.color}25`, borderRadius: 12, padding: '12px', marginBottom: 12 }}>
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <Info size={13} style={{ color: rc3.color }} />
                                     <p style={{ color: rc3.color, fontWeight: 700, fontSize: 12, margin: 0 }}>Why this risk?</p>
                                   </div>
-                                  <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, lineHeight: 1.65, margin: 0 }}>
-                                    {d.reason}
-                                  </p>
+                                  <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, lineHeight: 1.65, margin: 0 }}>{d.reason}</p>
                                 </div>
-
-                                {/* Treatment */}
                                 <div style={{ background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 12, padding: '12px' }}>
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <Shield size={13} style={{ color: '#4ade80' }} />
@@ -1189,7 +1401,6 @@ export default function WeatherForecast() {
                   })}
                 </div>
 
-                {/* Action plan */}
                 <div style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(74,222,128,0.12)', borderRadius: 14, padding: '14px', marginTop: 16 }}>
                   <div className="flex items-center gap-2 mb-2">
                     <Shield size={14} style={{ color: '#4ade80' }} />
@@ -1202,15 +1413,329 @@ export default function WeatherForecast() {
                     <li>Act on <span style={{ color: '#ef4444' }}>CRITICAL</span> / <span style={{ color: '#f97316' }}>HIGH</span> risks within 24–48 hours</li>
                   </ul>
                 </div>
-
-                <motion.button whileTap={{ scale: 0.97 }} onClick={() => { setStep('pick_crop'); setSearch(''); }}
-                  className="w-full mt-4 py-3 rounded-xl text-sm font-semibold"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.45)' }}>
-                  🌱 Change Crop · فصل تبدیل کریں
-                </motion.button>
               </motion.div>
             </AnimatePresence>
           )}
+
+          {/* ── TAB: CROP ACTIONS ─────────────────────────────────────── */}
+          {activeTab === 'actions' && (
+            <AnimatePresence mode="wait">
+              <motion.div key="actions-tab" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+
+                {/* Crop ideal conditions strip */}
+                {(() => {
+                  const k = getCropKnowledge(cropId);
+                  return (
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '14px', marginBottom: 16 }}>
+                      <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginBottom: 10, letterSpacing: '0.1em' }}>
+                        🌿 IDEAL CONDITIONS FOR {crop?.name?.toUpperCase()}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: '🌡️ Temperature', val: `${k.tempMin}–${k.tempMax}°C` },
+                          { label: '💧 Humidity',    val: `${k.humidMin}–${k.humidMax}%` },
+                          { label: '🌧️ Rain/day',   val: `${k.rainMin}–${k.rainMax}mm` },
+                          { label: '🚿 Water Need',  val: k.waterNeed },
+                          { label: '🧪 Soil pH',     val: k.soilPH },
+                          { label: '📅 Season',      val: k.season },
+                        ].map(item => (
+                          <div key={item.label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '8px 10px' }}>
+                            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '0 0 2px', fontFamily: "'JetBrains Mono', monospace" }}>{item.label}</p>
+                            <p style={{ color: 'white', fontSize: 12, fontWeight: 700, margin: 0 }}>{item.val}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(74,222,128,0.06)', borderRadius: 10 }}>
+                        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, margin: '0 0 2px', fontFamily: "'JetBrains Mono', monospace" }}>💊 KEY NUTRIENTS</p>
+                        <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, margin: 0 }}>{k.keyNutrients}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Action plan loading */}
+                {actionLoading && (
+                  <div className="flex flex-col items-center py-12 gap-4">
+                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}>
+                      <Sparkles size={28} style={{ color: '#4ade80' }} />
+                    </motion.div>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>Analysing {city.name} forecast for {crop?.name}…</p>
+                    <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11 }}>Comparing weather vs ideal conditions</p>
+                  </div>
+                )}
+
+                {/* Action plan error */}
+                {actionError && !actionLoading && (
+                  <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 14, padding: '16px', textAlign: 'center' }}>
+                    <p style={{ color: '#ef4444', fontSize: 13, margin: '0 0 12px' }}>{actionError}</p>
+                    <motion.button whileTap={{ scale: 0.95 }} onClick={fetchActionPlan}
+                      className="flex items-center gap-2 mx-auto px-4 py-2 rounded-xl text-sm"
+                      style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                      <RefreshCw size={13} /> Try Again
+                    </motion.button>
+                  </div>
+                )}
+
+                {/* Action plan content */}
+                {actionPlan && !actionLoading && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+
+                    {/* Urgent alert */}
+                    {actionPlan.urgentAlert && actionPlan.urgentAlert !== 'null' && (
+                      <motion.div initial={{ scale: 0.96 }} animate={{ scale: 1 }}
+                        style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 14, padding: '14px', marginBottom: 16 }}>
+                        <div className="flex items-start gap-2">
+                          <span style={{ fontSize: 20 }}>🚨</span>
+                          <div>
+                            <p style={{ color: '#ef4444', fontWeight: 800, fontSize: 13, margin: '0 0 4px' }}>URGENT ALERT</p>
+                            <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{actionPlan.urgentAlert}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Overall assessment */}
+                    <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.18)', borderRadius: 14, padding: '14px', marginBottom: 16 }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Leaf size={14} style={{ color: '#4ade80' }} />
+                        <p style={{ color: '#4ade80', fontWeight: 700, fontSize: 12, margin: 0 }}>WEEKLY OVERVIEW FOR {crop?.name?.toUpperCase()}</p>
+                      </div>
+                      <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 1.7, margin: 0 }}>{actionPlan.overallAssessment}</p>
+                    </div>
+
+                    {/* Day-by-day plan */}
+                    <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginBottom: 12, letterSpacing: '0.1em' }}>
+                      📅 DAY-BY-DAY ACTION PLAN — TAP TO EXPAND
+                    </p>
+
+                    <div className="space-y-2 mb-4">
+                      {actionPlan.days?.map((d, i) => {
+                        const sc = STATUS_CFG[d.status] || STATUS_CFG.caution;
+                        const ic = IRRIGATE_CFG[d.irrigate] || IRRIGATE_CFG.normal;
+                        const fc = forecast[i];
+                        const isOpen = expandedDay === i;
+                        return (
+                          <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                            <motion.button whileTap={{ scale: 0.98 }} onClick={() => setExpandedDay(isOpen ? -1 : i)}
+                              className="w-full text-left"
+                              style={{ background: isOpen ? sc.bg : 'rgba(255,255,255,0.03)', border: `1px solid ${isOpen ? sc.color + '40' : 'rgba(255,255,255,0.08)'}`, borderLeft: `3px solid ${sc.color}`, borderRadius: 14, padding: '12px 14px', transition: 'all 0.2s' }}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span style={{ fontSize: 20 }}>{sc.emoji}</span>
+                                  <div>
+                                    <p style={{ color: 'white', fontWeight: 700, fontSize: 14, margin: 0 }}>{d.day}</p>
+                                    <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, margin: '1px 0 0' }}>
+                                      {fc ? `${fc.temp}°C · ${fc.humidity}% RH` : ''} · <span style={{ color: sc.color }}>{sc.label}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span style={{ fontSize: 14 }}>{ic.emoji}</span>
+                                  <ChevronRight size={14} style={{ color: 'rgba(255,255,255,0.3)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+                                </div>
+                              </div>
+                            </motion.button>
+
+                            <AnimatePresence>
+                              {isOpen && (
+                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                  style={{ background: 'rgba(255,255,255,0.02)', border: `1px solid ${sc.color}20`, borderTop: 'none', borderRadius: '0 0 14px 14px', overflow: 'hidden' }}>
+                                  <div style={{ padding: '14px' }}>
+
+                                    {/* Status reason */}
+                                    <div style={{ background: sc.bg, borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+                                      <p style={{ color: sc.color, fontSize: 12, fontWeight: 700, margin: '0 0 3px' }}>
+                                        {sc.emoji} Crop Status: {sc.label}
+                                      </p>
+                                      <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 1.55, margin: 0 }}>{d.statusReason}</p>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, fontFamily: "'JetBrains Mono', monospace", marginBottom: 8, letterSpacing: '0.1em' }}>✅ WHAT TO DO</p>
+                                    <div className="space-y-2 mb-3">
+                                      {d.actions?.map((act, ai) => (
+                                        <div key={ai} className="flex items-start gap-2"
+                                          style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.12)', borderRadius: 10, padding: '8px 10px' }}>
+                                          <span style={{ color: '#4ade80', fontWeight: 900, fontSize: 13, flexShrink: 0 }}>{ai + 1}.</span>
+                                          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>{act}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Irrigation */}
+                                    <div style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+                                      <p style={{ color: '#60a5fa', fontWeight: 700, fontSize: 12, margin: '0 0 3px' }}>{ic.emoji} Irrigation: {ic.label}</p>
+                                      <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>{d.irrigateReason}</p>
+                                    </div>
+
+                                    {/* Avoid */}
+                                    <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 10, padding: '10px 12px' }}>
+                                      <p style={{ color: '#f87171', fontWeight: 700, fontSize: 12, margin: '0 0 3px' }}>🚫 Avoid Today</p>
+                                      <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>{d.avoid}</p>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Weekly tips */}
+                    <div style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 14, padding: '14px', marginBottom: 12 }}>
+                      <p style={{ color: '#4ade80', fontWeight: 700, fontSize: 12, margin: '0 0 10px', fontFamily: "'JetBrains Mono', monospace', letterSpacing: '0.05em" }}>
+                        💡 WEEKLY TIPS FOR {crop?.name?.toUpperCase()}
+                      </p>
+                      <div className="space-y-2">
+                        {actionPlan.weeklyTips?.map((tip, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span style={{ color: '#4ade80', fontSize: 11, flexShrink: 0, marginTop: 1 }}>▸</span>
+                            <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{tip}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Fertilizer advice */}
+                    {actionPlan.fertilizerAdvice && (
+                      <div style={{ background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: 14, padding: '14px', marginBottom: 12 }}>
+                        <p style={{ color: '#eab308', fontWeight: 700, fontSize: 12, margin: '0 0 6px' }}>🧪 Fertilizer This Week</p>
+                        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{actionPlan.fertilizerAdvice}</p>
+                      </div>
+                    )}
+
+                    {/* Harvest note */}
+                    {actionPlan.harvestNote && actionPlan.harvestNote !== 'null' && (
+                      <div style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 14, padding: '14px', marginBottom: 12 }}>
+                        <p style={{ color: '#c084fc', fontWeight: 700, fontSize: 12, margin: '0 0 6px' }}>🌾 Harvest Note</p>
+                        <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>{actionPlan.harvestNote}</p>
+                      </div>
+                    )}
+
+                    {/* Refresh button */}
+                    <motion.button whileTap={{ scale: 0.96 }} onClick={fetchActionPlan}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
+                      <RefreshCw size={13} /> Regenerate Plan
+                    </motion.button>
+                  </motion.div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          )}
+
+          {/* ── TAB: AI CHAT ─────────────────────────────────────────── */}
+          {activeTab === 'chat' && (
+            <AnimatePresence mode="wait">
+              <motion.div key="chat-tab" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+                {/* Context banner */}
+                <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span style={{ fontSize: 16 }}>{crop?.emoji}</span>
+                    <p style={{ color: '#4ade80', fontWeight: 700, fontSize: 12, margin: 0 }}>{crop?.name} · {city.name}</p>
+                    <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11 }}>·</span>
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, margin: 0 }}>
+                      Today {forecast[0]?.temp}°C · {forecast[0]?.humidity}% RH · {forecast[0]?.rain}mm
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick prompts */}
+                {chatMessages.length <= 1 && (
+                  <div className="mb-4">
+                    <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginBottom: 8, letterSpacing: '0.05em' }}>
+                      💬 QUICK QUESTIONS
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        `Should I irrigate ${crop?.name} today?`,
+                        `Best fertilizer for ${crop?.name} this week?`,
+                        `How to protect from disease in this weather?`,
+                        `Is this weather ideal for ${crop?.name}?`,
+                        `What spray should I use now?`,
+                        `When should I harvest?`,
+                      ].map((q, i) => (
+                        <motion.button key={i} whileTap={{ scale: 0.95 }}
+                          onClick={() => { setChatInput(q); }}
+                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 20, padding: '6px 12px', color: 'rgba(255,255,255,0.6)', fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                          {q}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Messages */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16, minHeight: 200 }}>
+                  {chatMessages.map((msg, i) => (
+                    <motion.div key={i} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                      style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                      {msg.role === 'assistant' && (
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: 8, marginTop: 2 }}>
+                          <span style={{ fontSize: 14 }}>🌿</span>
+                        </div>
+                      )}
+                      <div style={{
+                        maxWidth: '80%',
+                        background: msg.role === 'user' ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${msg.role === 'user' ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        padding: '10px 14px',
+                      }}>
+                        <p style={{ color: msg.role === 'user' ? '#4ade80' : 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap' }}>
+                          {msg.content.replace(/\*\*(.*?)\*\*/g, '$1')}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {chatLoading && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2">
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 14 }}>🌿</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '18px 18px 18px 4px', padding: '10px 16px' }}>
+                        <div className="flex gap-1.5 items-center">
+                          {[0, 1, 2].map(j => (
+                            <motion.div key={j} animate={{ y: [0, -4, 0] }} transition={{ duration: 0.6, delay: j * 0.15, repeat: Infinity }}
+                              style={{ width: 5, height: 5, borderRadius: '50%', background: '#4ade80' }} />
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="flex gap-2" style={{ position: 'sticky', bottom: 0, paddingBottom: 8 }}>
+                  <input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                    placeholder={`Ask about ${crop?.name} farming…`}
+                    className="flex-1 px-4 py-3 rounded-xl text-sm text-white outline-none"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', caretColor: '#4ade80' }}
+                  />
+                  <motion.button whileTap={{ scale: 0.9 }} onClick={sendChat} disabled={!chatInput.trim() || chatLoading}
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: chatInput.trim() ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.04)', border: `1px solid ${chatInput.trim() ? 'rgba(74,222,128,0.4)' : 'rgba(255,255,255,0.08)'}`, transition: 'all 0.2s' }}>
+                    <Send size={15} style={{ color: chatInput.trim() ? '#4ade80' : 'rgba(255,255,255,0.25)' }} />
+                  </motion.button>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          )}
+
+          {/* Change crop button */}
+          <motion.button whileTap={{ scale: 0.97 }} onClick={() => { setStep('pick_crop'); setSearch(''); }}
+            className="w-full mt-4 py-3 rounded-xl text-sm font-semibold"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
+            🌱 Change Crop · فصل تبدیل کریں
+          </motion.button>
         </>
       )}
     </div>
