@@ -352,17 +352,20 @@ const QUICK_QUESTIONS = [
 ];
 
 async function askCropAgent(messages, diagnosisContext, onChunk) {
-  const response = await fetch('http://127.0.0.1:8000/api/chat', {
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const response = await fetch(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messages: messages.map(m => ({ role: m.role, content: m.content })),
-      disease_name:          diagnosisContext.disease_name,
-      disease_name_urdu:     diagnosisContext.disease_name_urdu,
-      crop_type:             diagnosisContext.cropType,
-      severity:              diagnosisContext.severity,
-      recommended_pesticide: diagnosisContext.recommended_pesticide,
-      acres:                 diagnosisContext.acres,
+      context: {
+        disease_name:          diagnosisContext.disease_name,
+        disease_name_urdu:     diagnosisContext.disease_name_urdu,
+        cropType:              diagnosisContext.cropType,
+        severity:              diagnosisContext.severity,
+        recommended_pesticide: diagnosisContext.recommended_pesticide,
+        acres:                 diagnosisContext.acres,
+      },
     }),
   });
   if (!response.ok) throw new Error('Chat API error');
