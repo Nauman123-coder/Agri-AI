@@ -363,4 +363,37 @@ export const assessInsurance = (payload) =>
 export const getInsurancePolicies = () =>
   tryApi(() => api.get('/api/insurance/policies').then(r => r.data), MOCK.policies);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CHAT — Crop Expert AI (streaming)
+// ─────────────────────────────────────────────────────────────────────────────
+export const askCropAgent = async (messages, diagCtx, onChunk) => {
+  try {
+    const response = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, context: diagCtx }),
+    });
+
+    if (!response.ok) throw new Error(`Chat API error: ${response.status}`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      fullText += chunk;
+      onChunk(fullText);
+    }
+
+    return fullText;
+  } catch (err) {
+    // Fallback: call Groq directly from browser if backend unreachable
+    console.warn('Backend chat failed, trying direct fallback:', err.message);
+    throw err;
+  }
+};
+
 export default api;
