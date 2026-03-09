@@ -153,7 +153,7 @@ function Header() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate('/about')}
+          <motion.button whileTap={{ scale: 0.9 }} onClick={() => { window.location.href = '/landing.html'; }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
             style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', color: 'rgba(74,222,128,0.8)', fontFamily: "'Syne', sans-serif" }}>
             ℹ️ About
