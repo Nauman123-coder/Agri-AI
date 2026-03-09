@@ -906,6 +906,25 @@ const RISK_CFG = {
   safe:     { color: '#4ade80', bg: 'rgba(74,222,128,0.12)', label: 'SAFE',     emoji: '✅', desc: 'Conditions unfavorable for disease' },
 };
 
+// ── Seeded pseudo-random — same city+day always gives same weather ────────────
+// This ensures wheat and rice in Lahore show identical temperatures
+function seededRand(seed) {
+  // Mulberry32 hash — deterministic, fast
+  let s = seed >>> 0;
+  s = Math.imul(s ^ (s >>> 15), s | 1);
+  s ^= s + Math.imul(s ^ (s >>> 7), s | 61);
+  return ((s ^ (s >>> 14)) >>> 0) / 4294967296;
+}
+function cityDaySeed(cityName, dayIdx) {
+  // Hash city name into a number, combine with day and today's date (so it
+  // rotates daily but stays consistent across crop switches on the same day)
+  const today = new Date();
+  const dateSeed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+  let hash = dateSeed + dayIdx * 1000;
+  for (let c = 0; c < cityName.length; c++) hash = Math.imul(hash ^ cityName.charCodeAt(c), 2654435761);
+  return hash >>> 0;
+}
+
 // ── Forecast generator ────────────────────────────────────────────────────────
 function genForecast(city, cropId) {
   const DAYS = ['Today', 'Tomorrow', 'Day 3', 'Day 4', 'Day 5'];
@@ -913,11 +932,18 @@ function genForecast(city, cropId) {
   const diseases = FULL_DISEASE_DB[cropId] || [];
 
   return DAYS.map((day, i) => {
-    // Realistic variance around city baseline
-    const temp     = city.temp + (Math.random() - 0.5) * 7;
-    const humidity = Math.max(25, Math.min(98, city.humidity + (Math.random() - 0.5) * 18));
-    const wind     = Math.max(2, city.wind + (Math.random() - 0.5) * 10);
-    const rain     = (i === 2 || Math.random() > 0.72) ? Math.random() * 18 : 0;
+    // Deterministic variance — same city+day always gives same weather
+    const seed = cityDaySeed(city.name, i);
+    const r1 = seededRand(seed);
+    const r2 = seededRand(seed + 1);
+    const r3 = seededRand(seed + 2);
+    const r4 = seededRand(seed + 3);
+    const r5 = seededRand(seed + 4);
+
+    const temp     = city.temp + (r1 - 0.5) * 7;
+    const humidity = Math.max(25, Math.min(98, city.humidity + (r2 - 0.5) * 18));
+    const wind     = Math.max(2, city.wind + (r3 - 0.5) * 10);
+    const rain     = (i === 2 || r4 > 0.72) ? r5 * 18 : 0;
 
     const evaluated = diseases.map(d => {
       const score = d.score(temp, humidity, wind, rain);
@@ -977,8 +1003,10 @@ function getCropKnowledge(cropId) {
   return CROP_KNOWLEDGE[cropId] || DEFAULT_CROP_KNOWLEDGE;
 }
 
-// ── Generate weather-based action plan using Claude API ───────────────────────
+// ── Generate weather-based action plan via backend ───────────────────────────
 async function generateActionPlan(crop, city, forecast, knowledge) {
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
   const weatherSummary = forecast.map((d, i) =>
     `${d.day}: ${d.temp}°C, humidity ${d.humidity}%, wind ${d.wind}km/h, rain ${d.rain}mm — top disease risk: ${d.diseases[0]?.name || 'none'} (${d.topScore}%)`
   ).join('\n');
@@ -1027,37 +1055,95 @@ Format as JSON with this exact structure (no markdown, pure JSON):
   "harvestNote": "Any harvest timing note if relevant, else null"
 }`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+  const body = JSON.stringify({
+    messages: [{ role: 'user', content: prompt }],
+    context: { cropName: crop.name, cityName: city.name, mode: 'action_plan' },
   });
-  const data = await response.json();
-  const text = data.content?.map(b => b.text || '').join('') || '';
-  const clean = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 30000);
+      const response = await fetch(`${API_BASE}/api/weather-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let text = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        text += decoder.decode(value, { stream: true });
+      }
+      const clean = text.replace(/```json|```/g, '').trim();
+      return JSON.parse(clean);
+    } catch (e) {
+      if (attempt === 0) {
+        await new Promise(r => setTimeout(r, 4000));
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 // ── Chat with AI about crop + weather ────────────────────────────────────────
 async function chatWithAI(messages, crop, city, forecast, knowledge) {
-  const ctx = `You are KhetAI, an expert Pakistani agricultural advisor. The farmer is growing ${crop.name} (${crop.urdu}) in ${city.name}. Today: ${forecast[0]?.temp}°C, humidity ${forecast[0]?.humidity}%, rain ${forecast[0]?.rain}mm. Top disease risk: ${forecast[0]?.diseases[0]?.name} (${forecast[0]?.topScore}%). Ideal temp for ${crop.name}: ${knowledge.tempMin}–${knowledge.tempMax}°C. Answer in simple English (and Urdu if asked). Be concise, practical, specific to Pakistani farming.`;
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 600,
-      system: ctx,
-      messages,
-    }),
+  const weatherCtx =
+    `Weather context for ${city.name}: Today ${forecast[0]?.temp}°C, ${forecast[0]?.humidity}% humidity, ${forecast[0]?.rain}mm rain. ` +
+    `5-day: ${forecast.map(d => `${d.day}: ${d.temp}°C/${d.humidity}%RH/${d.rain}mm`).join(', ')}. ` +
+    `Top disease risk: ${forecast[0]?.diseases[0]?.name || 'none'} (${forecast[0]?.topScore || 0}%). ` +
+    `Ideal for ${crop.name}: ${knowledge.tempMin}–${knowledge.tempMax}°C, ${knowledge.humidMin}–${knowledge.humidMax}% RH.`;
+
+  const apiMessages = [
+    { role: 'user',      content: `[CONTEXT] ${weatherCtx}` },
+    { role: 'assistant', content: `Understood. I have the full weather forecast for ${crop.name} in ${city.name}.` },
+    ...messages.filter(m => !m.content?.startsWith('[CONTEXT]')),
+  ];
+
+  const body = JSON.stringify({
+    messages: apiMessages,
+    context: { cropName: crop.name, cropUrdu: crop.urdu, cityName: city.name, weatherSummary: weatherCtx, knowledge },
   });
-  const data = await response.json();
-  return data.content?.map(b => b.text || '').join('') || 'Sorry, could not get a response.';
+
+  // Retry once — Render free tier needs ~10s cold start
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 28000);
+      const response = await fetch(`${API_BASE}/api/weather-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: ctrl.signal,
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let full = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        full += decoder.decode(value, { stream: true });
+      }
+      return full || 'No response received.';
+    } catch (e) {
+      if (attempt === 0) {
+        // Cold start — wait 4s then retry
+        await new Promise(r => setTimeout(r, 4000));
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 // ── STATUS color map ──────────────────────────────────────────────────────────
@@ -1157,14 +1243,25 @@ export default function WeatherForecast() {
     setChatMessages(newMsgs);
     setChatInput('');
     setChatLoading(true);
+    // Show "waking up server" hint after 4s if still loading
+    let wakeHint = null;
+    const wakeTimer = setTimeout(() => {
+      wakeHint = { role: 'assistant', content: '⏳ Waking up the AI server (first message can take ~10s)…', isHint: true };
+      setChatMessages(prev => [...prev, wakeHint]);
+    }, 4000);
     try {
       const knowledge = getCropKnowledge(cropId);
-      // Pass only actual user/assistant messages (skip seeded welcome)
       const apiMsgs = newMsgs.filter(m => !(m.role === 'assistant' && m.content.startsWith('Hello! 👋')));
       const reply = await chatWithAI(apiMsgs.length > 0 ? apiMsgs : [userMsg], crop, city, forecast, knowledge);
-      setChatMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      clearTimeout(wakeTimer);
+      // Remove hint if it was shown, then add real reply
+      setChatMessages(prev => [...prev.filter(m => !m.isHint), { role: 'assistant', content: reply }]);
     } catch (e) {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Network error. Please try again.' }]);
+      clearTimeout(wakeTimer);
+      setChatMessages(prev => [...prev.filter(m => !m.isHint), {
+        role: 'assistant',
+        content: '⚠️ Could not reach the AI server. The server may be starting up — please wait 15 seconds and try again.',
+      }]);
     } finally {
       setChatLoading(false);
     }

@@ -33,11 +33,12 @@ const MORE_NAV = [
   { path: '/insurance', label: 'Insurance', labelUrdu: 'بیمہ',    emoji: '🛡️', desc: 'Parametric crop insurance'    },
   { path: '/weather',   label: 'Forecast',  labelUrdu: 'موسم',    emoji: '🌦️', desc: 'Disease risk by weather'      },
   { path: '/satellite', label: 'Satellite', labelUrdu: 'سیٹلائٹ', emoji: '🛰️', desc: 'NDVI field health monitoring' },
+  { path: '/about',     label: 'About',     labelUrdu: 'ہمارے بارے میں', emoji: 'ℹ️', desc: 'About KhetAI · technology · team' },
 ];
 
 function MoreSheet({ onClose }) {
   const navigate = useNavigate();
-  const go = (path) => { navigate(path); onClose(); };
+  const go = (path) => { if (path === '/about') { window.open('/landing.html', '_blank'); onClose(); return; } navigate(path); onClose(); };
 
   return (
     <motion.div
@@ -137,6 +138,7 @@ function NavBar() {
 }
 
 function Header() {
+  const navigate = useNavigate();
   return (
     <header className="sticky top-0 z-40 border-b border-white/5"
       style={{ background: 'rgba(10,10,10,0.95)', backdropFilter: 'blur(20px)' }}>
@@ -150,9 +152,16 @@ function Header() {
             <p className="urdu-text text-khet-500/70 text-xs leading-none mt-0.5">کھیت اے آئی</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="glow-dot animate-pulse" />
-          <span className="text-xs text-white/40" style={{ fontFamily: "'JetBrains Mono', monospace" }}>LIVE</span>
+        <div className="flex items-center gap-3">
+          <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate('/about')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
+            style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', color: 'rgba(74,222,128,0.8)', fontFamily: "'Syne', sans-serif" }}>
+            ℹ️ About
+          </motion.button>
+          <div className="flex items-center gap-2">
+            <div className="glow-dot animate-pulse" />
+            <span className="text-xs text-white/40" style={{ fontFamily: "'JetBrains Mono', monospace" }}>LIVE</span>
+          </div>
         </div>
       </div>
     </header>
