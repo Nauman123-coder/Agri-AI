@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-from routers import diagnose, negotiate, economics, logistics, insurance, market, chat
+from routers import diagnose, negotiate, economics, logistics, insurance, market, chat, satellite
 from core.database import engine, Base
 
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +49,7 @@ app.include_router(logistics.router, prefix="/api/logistics", tags=["Logistics"]
 app.include_router(insurance.router, prefix="/api/insurance", tags=["Insurance"])
 app.include_router(market.router, prefix="/api/market", tags=["Market"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
+app.include_router(satellite.router, prefix="/api/satellite", tags=["Satellite"])
 
 
 @app.get("/")
