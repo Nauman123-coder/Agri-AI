@@ -38,7 +38,7 @@ const MORE_NAV = [
 
 function MoreSheet({ onClose }) {
   const navigate = useNavigate();
-  const go = (path) => { if (path === '/about') { window.open('/landing.html', '_blank'); onClose(); return; } navigate(path); onClose(); };
+  const go = (path) => { if (path === '/about') { window.location.href = '/landing.html'; onClose(); return; } navigate(path); onClose(); };
 
   return (
     <motion.div
